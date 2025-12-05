@@ -79,10 +79,43 @@ async def notify_user_telegram(client: TelegramClient, message_text: str, keywor
         notification += f"**Текст сообщения:**\n\n"
         notification += message_text[:2000]  # Ограничение длины сообщения в Telegram
         
+        # Определяем куда отправлять
+        if NOTIFY_CHAT_ID.lower() == 'me':
+            entity = 'me'
+        else:
+            try:
+                chat_id = int(NOTIFY_CHAT_ID)
+                # Пытаемся получить entity по ID
+                try:
+                    entity = await client.get_entity(chat_id)
+                except (ValueError, TypeError):
+                    # Если не получается, пробуем разные форматы ID
+                    # Для групп/каналов может быть -100XXXXXXXXXX или -XXXXXXXXXX
+                    try:
+                        # Если ID отрицательный и меньше 13 цифр, пробуем добавить -100
+                        if chat_id < 0 and len(str(abs(chat_id))) < 13:
+                            entity_with_prefix = int(f"-100{abs(chat_id)}")
+                            entity = await client.get_entity(entity_with_prefix)
+                        else:
+                            # Пробуем отправить напрямую по числу
+                            entity = chat_id
+                    except:
+                        # В последнюю очередь пробуем отправить напрямую
+                        entity = chat_id
+            except ValueError:
+                # Если chat_id не число, используем как есть (username)
+                entity = NOTIFY_CHAT_ID
+        
         # Отправляем сообщение
-        await client.send_message(NOTIFY_CHAT_ID, notification, parse_mode='markdown')
+        await client.send_message(entity, notification, parse_mode='markdown')
         print(f"✅ Уведомление отправлено в Telegram (chat_id: {NOTIFY_CHAT_ID})")
         
+    except ValueError as e:
+        print(f"⚠️  Ошибка: Не удалось найти чат с ID {NOTIFY_CHAT_ID}")
+        print(f"   Убедитесь, что:")
+        print(f"   1. Бот добавлен в группу/канал")
+        print(f"   2. Chat ID указан правильно")
+        print(f"   3. Для групп используйте формат: -100XXXXXXXXXX или -XXXXXXXXXX")
     except Exception as e:
         print(f"⚠️  Ошибка при отправке уведомления в Telegram: {e}")
 
