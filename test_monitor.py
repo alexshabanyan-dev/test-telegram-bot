@@ -25,8 +25,9 @@ async def test_monitor():
         print("❌ Ошибка: Не указаны API_ID и/или API_HASH в .env файле")
         return
     
-    # Инициализируем клиент
-    client = TelegramClient('telegram_monitor', API_ID, API_HASH)
+    # Инициализируем клиент с другим файлом сессии для теста
+    # Используем отдельный файл, чтобы не конфликтовать с основным ботом
+    client = TelegramClient('test_monitor_session', API_ID, API_HASH)
     
     # Регистрируем обработчик для всех сообщений
     @client.on(events.NewMessage(chats=CHANNEL_NAME))
@@ -68,8 +69,13 @@ async def test_monitor():
         
     except Exception as e:
         print(f"❌ Ошибка: {e}")
+    except KeyboardInterrupt:
+        print("\n\n👋 Тест прерван пользователем")
     finally:
-        await client.disconnect()
+        try:
+            await client.disconnect()
+        except:
+            pass
 
 if __name__ == "__main__":
     try:
