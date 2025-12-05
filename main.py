@@ -147,11 +147,20 @@ async def handler(event, channel_name: str, client: TelegramClient):
         text_lower = message_text.lower() if message_text else ""
         print(f"ℹ️  Ключевые слова не найдены в сообщении")
         print(f"   Ищем: {[k.lower() for k in config.KEYWORDS]}")
-        print(f"   Текст (первые 200 символов в lower): {text_lower[:200]}")
+        # Показываем весь текст (или первые 500 символов, если очень длинный)
+        text_preview = text_lower if len(text_lower) <= 500 else text_lower[:500] + "..."
+        print(f"   Текст целиком (в lower, {len(text_lower)} символов): {text_preview}")
         # Проверяем вручную для отладки
         for keyword in config.KEYWORDS:
-            if keyword.lower() in text_lower:
-                print(f"   ⚠️  ОШИБКА: '{keyword.lower()}' ДОЛЖНО БЫТЬ НАЙДЕНО!")
+            keyword_lower = keyword.lower()
+            if keyword_lower in text_lower:
+                # Находим позицию вхождения
+                pos = text_lower.find(keyword_lower)
+                context_start = max(0, pos - 20)
+                context_end = min(len(text_lower), pos + len(keyword_lower) + 20)
+                context = text_lower[context_start:context_end]
+                print(f"   ⚠️  ОШИБКА: '{keyword_lower}' НАЙДЕНО в позиции {pos}!")
+                print(f"      Контекст: ...{context}...")
     
     if found_keywords:
         # Получаем информацию о канале
