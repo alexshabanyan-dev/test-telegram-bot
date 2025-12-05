@@ -19,10 +19,17 @@ sleep 2
 
 # Удаляем файлы блокировки сессии
 echo "🗑️  Удаление файлов блокировки..."
-cd ~/test-telegram-bot 2>/dev/null || cd /root/test-telegram-bot 2>/dev/null || {
+# Определяем путь к проекту (может быть в разных местах)
+PROJECT_DIR=""
+if [ -d ~/test-telegram-bot ]; then
+    PROJECT_DIR=~/test-telegram-bot
+elif [ -d /root/test-telegram-bot ]; then
+    PROJECT_DIR=/root/test-telegram-bot
+else
     echo "❌ Не удалось найти директорию проекта"
     exit 1
-}
+fi
+cd "$PROJECT_DIR"
 
 # Удаляем файлы сессии и журналы
 rm -f *.session-journal
