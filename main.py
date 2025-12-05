@@ -94,8 +94,16 @@ async def handler(event, channel_name: str, client: TelegramClient):
     message = event.message
     message_text = message.message or ""
     
+    # Отладочное логирование (можно отключить позже)
+    print(f"📨 Получено сообщение ID: {message.id}, Текст: {message_text[:100]}...")
+    
     # Проверяем на наличие ключевых слов
     found_keywords = check_keywords(message_text)
+    
+    if found_keywords:
+        print(f"✅ Найдены ключевые слова: {found_keywords}")
+    else:
+        print(f"ℹ️  Ключевые слова не найдены в сообщении")
     
     if found_keywords:
         # Получаем информацию о канале
@@ -148,9 +156,19 @@ async def main():
     client = TelegramClient(str(session_path), API_ID, API_HASH)
     
     # Регистрируем обработчик событий
-    @client.on(events.NewMessage(chats=CHANNEL_NAME))
-    async def message_handler(event):
-        await handler(event, CHANNEL_NAME, client)
+    # Используем entity вместо строки для более надежной работы
+    try:
+        channel_entity = await client.get_entity(CHANNEL_NAME)
+        print(f"📡 Регистрирую обработчик для канала: {CHANNEL_NAME} (ID: {channel_entity.id})")
+        
+        @client.on(events.NewMessage(chats=channel_entity))
+        async def message_handler(event):
+            await handler(event, CHANNEL_NAME, client)
+    except Exception as e:
+        print(f"⚠️  Предупреждение: Не удалось получить entity канала, используем строку: {e}")
+        @client.on(events.NewMessage(chats=CHANNEL_NAME))
+        async def message_handler(event):
+            await handler(event, CHANNEL_NAME, client)
     
     # Подключаемся к Telegram с обработкой ошибок блокировки
     try:
