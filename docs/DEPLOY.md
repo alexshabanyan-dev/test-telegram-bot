@@ -159,9 +159,9 @@ sudo journalctl -u telegram-monitor.service -n 100
 sudo journalctl -u telegram-monitor.service -n 50 | grep -i "ошибка\|error"
 
 # Использовать удобный скрипт для просмотра логов
-bash view_logs.sh matches  # Только совпадения
-bash view_logs.sh follow    # Все логи в реальном времени
-bash view_logs.sh errors    # Только ошибки
+bash scripts/view_logs.sh matches  # Только совпадения
+bash scripts/view_logs.sh follow    # Все логи в реальном времени
+bash scripts/view_logs.sh errors    # Только ошибки
 
 # Остановить бота
 sudo systemctl stop telegram-monitor.service
@@ -185,6 +185,9 @@ cd ~/test-telegram-bot
 git pull
 source venv/bin/activate
 pip install -r requirements.txt
+# Обновите systemd service файл если он изменился
+sudo cp ~/test-telegram-bot/telegram-monitor.service /etc/systemd/system/
+sudo systemctl daemon-reload
 sudo systemctl restart telegram-monitor.service
 ```
 
@@ -197,7 +200,7 @@ sudo systemctl restart telegram-monitor.service
 ```bash
 # Запустите скрипт исправления
 cd ~/test-telegram-bot
-bash fix_session_lock.sh
+bash scripts/fix_session_lock.sh
 
 # Или вручную:
 sudo systemctl stop telegram-monitor.service
