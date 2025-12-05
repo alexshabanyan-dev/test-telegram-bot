@@ -28,15 +28,18 @@ def check_keywords(text: str) -> list:
     """
     Проверяет текст на наличие ключевых фраз
     Возвращает список найденных ключевых слов
+    Все сравнения выполняются в нижнем регистре (case-insensitive)
     """
     if not text:
         return []
     
     found_keywords = []
-    text_to_check = text.lower() if config.CASE_INSENSITIVE else text
+    # Всегда переводим текст в нижний регистр для сравнения
+    text_to_check = text.lower()
     
+    # Сравниваем все ключевые слова в нижнем регистре
     for keyword in config.KEYWORDS:
-        keyword_to_check = keyword.lower() if config.CASE_INSENSITIVE else keyword
+        keyword_to_check = keyword.lower()
         if keyword_to_check in text_to_check:
             found_keywords.append(keyword)
     
