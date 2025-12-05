@@ -155,21 +155,6 @@ async def main():
     session_path = pathlib.Path('telegram_monitor.session').absolute()
     client = TelegramClient(str(session_path), API_ID, API_HASH)
     
-    # Регистрируем обработчик событий
-    # Используем entity вместо строки для более надежной работы
-    try:
-        channel_entity = await client.get_entity(CHANNEL_NAME)
-        print(f"📡 Регистрирую обработчик для канала: {CHANNEL_NAME} (ID: {channel_entity.id})")
-        
-        @client.on(events.NewMessage(chats=channel_entity))
-        async def message_handler(event):
-            await handler(event, CHANNEL_NAME, client)
-    except Exception as e:
-        print(f"⚠️  Предупреждение: Не удалось получить entity канала, используем строку: {e}")
-        @client.on(events.NewMessage(chats=CHANNEL_NAME))
-        async def message_handler(event):
-            await handler(event, CHANNEL_NAME, client)
-    
     # Подключаемся к Telegram с обработкой ошибок блокировки
     try:
         await client.start()
@@ -185,6 +170,21 @@ async def main():
             return
         else:
             raise
+    
+    # Регистрируем обработчик событий ПОСЛЕ подключения
+    # Используем entity вместо строки для более надежной работы
+    try:
+        channel_entity = await client.get_entity(CHANNEL_NAME)
+        print(f"📡 Регистрирую обработчик для канала: {CHANNEL_NAME} (ID: {channel_entity.id})")
+        
+        @client.on(events.NewMessage(chats=channel_entity))
+        async def message_handler(event):
+            await handler(event, CHANNEL_NAME, client)
+    except Exception as e:
+        print(f"⚠️  Предупреждение: Не удалось получить entity канала, используем строку: {e}")
+        @client.on(events.NewMessage(chats=CHANNEL_NAME))
+        async def message_handler(event):
+            await handler(event, CHANNEL_NAME, client)
     
     # Получаем информацию о канале
     try:
