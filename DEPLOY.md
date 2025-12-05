@@ -146,8 +146,22 @@ sudo systemctl status telegram-monitor.service
 # Проверить статус бота
 sudo systemctl status telegram-monitor.service
 
-# Посмотреть логи
+# Посмотреть логи (все)
 sudo journalctl -u telegram-monitor.service -f
+
+# Посмотреть только перехваченные сообщения (совпадения)
+sudo journalctl -u telegram-monitor.service -f | grep -A 10 "НАЙДЕНО СОВПАДЕНИЕ"
+
+# Посмотреть последние 100 строк логов
+sudo journalctl -u telegram-monitor.service -n 100
+
+# Посмотреть только ошибки
+sudo journalctl -u telegram-monitor.service -n 50 | grep -i "ошибка\|error"
+
+# Использовать удобный скрипт для просмотра логов
+bash view_logs.sh matches  # Только совпадения
+bash view_logs.sh follow    # Все логи в реальном времени
+bash view_logs.sh errors    # Только ошибки
 
 # Остановить бота
 sudo systemctl stop telegram-monitor.service
