@@ -297,8 +297,19 @@ async def main():
     
     print("⏳ Ожидание новых сообщений... (Ctrl+C для остановки)\n")
     
-    # Запускаем мониторинг
-    await client.run_until_disconnected()
+    # Запускаем мониторинг с автоматическим переподключением
+    try:
+        await client.run_until_disconnected()
+    except (ConnectionError, OSError) as e:
+        print(f"\n⚠️  Соединение разорвано: {e}")
+        print("   Systemd автоматически перезапустит сервис")
+        raise  # Поднимаем исключение, чтобы systemd перезапустил сервис
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "connection" in error_msg or "reset" in error_msg or "peer" in error_msg:
+            print(f"\n⚠️  Проблема с соединением: {e}")
+            print("   Systemd автоматически перезапустит сервис")
+        raise
 
 
 if __name__ == "__main__":
