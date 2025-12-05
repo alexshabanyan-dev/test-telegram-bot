@@ -113,7 +113,10 @@ WorkingDirectory=/root/test-telegram-bot
 Environment="PATH=/root/test-telegram-bot/venv/bin"
 ExecStart=/root/test-telegram-bot/venv/bin/python /root/test-telegram-bot/main.py
 Restart=always
-RestartSec=10
+RestartSec=30
+# Увеличиваем время ожидания перед перезапуском
+StartLimitInterval=300
+StartLimitBurst=5
 
 [Install]
 WantedBy=multi-user.target
@@ -168,6 +171,34 @@ cd ~/test-telegram-bot
 git pull
 source venv/bin/activate
 pip install -r requirements.txt
+sudo systemctl restart telegram-monitor.service
+```
+
+## Устранение проблем
+
+### Ошибка "database is locked"
+
+Если бот постоянно перезапускается с ошибкой "database is locked":
+
+```bash
+# Запустите скрипт исправления
+cd ~/test-telegram-bot
+bash fix_session_lock.sh
+
+# Или вручную:
+sudo systemctl stop telegram-monitor.service
+pkill -f "python.*main.py" || true
+rm -f ~/test-telegram-bot/*.session-journal
+sudo systemctl start telegram-monitor.service
+```
+
+### Обновление systemd сервиса
+
+Если обновили файл `telegram-monitor.service`:
+
+```bash
+sudo cp ~/test-telegram-bot/telegram-monitor.service /etc/systemd/system/
+sudo systemctl daemon-reload
 sudo systemctl restart telegram-monitor.service
 ```
 
