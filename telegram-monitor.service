@@ -6,8 +6,12 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/root/test-telegram-bot
-Environment="PATH=/root/test-telegram-bot/venv/bin"
+Environment="PATH=/root/test-telegram-bot/venv/bin:/usr/local/bin:/usr/bin:/bin"
+# Явно указываем путь к .env файлу
+Environment="PYTHONUNBUFFERED=1"
 ExecStart=/root/test-telegram-bot/venv/bin/python /root/test-telegram-bot/main.py
+StandardOutput=journal
+StandardError=journal
 Restart=always
 RestartSec=30
 # Увеличиваем время ожидания перед перезапуском

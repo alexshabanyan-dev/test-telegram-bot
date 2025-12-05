@@ -12,7 +12,10 @@ from telethon.tl.types import Channel
 import config
 
 # Загружаем переменные окружения
-load_dotenv()
+# Используем абсолютный путь к .env файлу для работы с systemd
+import pathlib
+env_path = pathlib.Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 # Получаем данные из переменных окружения
 API_ID = os.getenv('API_ID')
