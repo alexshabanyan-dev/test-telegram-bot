@@ -18,6 +18,7 @@ load_dotenv()
 API_ID = os.getenv('API_ID')
 API_HASH = os.getenv('API_HASH')
 CHANNEL_NAME = os.getenv('CHANNEL_NAME', config.CHANNEL_NAME)
+NOTIFY_CHAT_ID = os.getenv('NOTIFY_CHAT_ID')  # ID чата для уведомлений (ваш личный чат или другой канал)
 
 
 def check_keywords(text: str) -> list:
@@ -39,10 +40,9 @@ def check_keywords(text: str) -> list:
     return found_keywords
 
 
-def notify_user(message_text: str, keywords: list, channel_name: str, message_id: int):
+def notify_user_console(message_text: str, keywords: list, channel_name: str, message_id: int):
     """
-    Уведомляет пользователя о найденном совпадении
-    В MVP версии просто выводит в консоль
+    Выводит уведомление в консоль
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print("\n" + "="*60)
@@ -55,7 +55,39 @@ def notify_user(message_text: str, keywords: list, channel_name: str, message_id
     print("="*60 + "\n")
 
 
-async def handler(event, channel_name: str):
+async def notify_user_telegram(client: TelegramClient, message_text: str, keywords: list, 
+                               channel_name: str, message_id: int, channel_link: str = None):
+    """
+    Отправляет уведомление в Telegram
+    """
+    if not NOTIFY_CHAT_ID:
+        return
+    
+    try:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Формируем сообщение
+        notification = f"🔔 **НАЙДЕНО СОВПАДЕНИЕ!**\n\n"
+        notification += f"📺 **Канал:** {channel_name}\n"
+        notification += f"🔑 **Ключевые слова:** {', '.join(keywords)}\n"
+        notification += f"📝 **ID сообщения:** {message_id}\n"
+        notification += f"🕐 **Время:** {timestamp}\n\n"
+        
+        if channel_link:
+            notification += f"🔗 [Открыть канал]({channel_link})\n\n"
+        
+        notification += f"**Текст сообщения:**\n\n"
+        notification += message_text[:2000]  # Ограничение длины сообщения в Telegram
+        
+        # Отправляем сообщение
+        await client.send_message(NOTIFY_CHAT_ID, notification, parse_mode='markdown')
+        print(f"✅ Уведомление отправлено в Telegram (chat_id: {NOTIFY_CHAT_ID})")
+        
+    except Exception as e:
+        print(f"⚠️  Ошибка при отправке уведомления в Telegram: {e}")
+
+
+async def handler(event, channel_name: str, client: TelegramClient):
     """
     Обработчик новых сообщений из канала
     """
@@ -70,12 +102,27 @@ async def handler(event, channel_name: str):
         channel = await event.get_chat()
         channel_title = getattr(channel, 'title', channel_name) or channel_name
         
-        # Уведомляем пользователя
-        notify_user(
+        # Формируем ссылку на канал
+        channel_link = None
+        if hasattr(channel, 'username') and channel.username:
+            channel_link = f"https://t.me/{channel.username}/{message.id}"
+        
+        # Выводим в консоль
+        notify_user_console(
             message_text=message_text,
             keywords=found_keywords,
             channel_name=channel_title,
             message_id=message.id
+        )
+        
+        # Отправляем в Telegram
+        await notify_user_telegram(
+            client=client,
+            message_text=message_text,
+            keywords=found_keywords,
+            channel_name=channel_title,
+            message_id=message.id,
+            channel_link=channel_link
         )
 
 
@@ -100,7 +147,7 @@ async def main():
     # Регистрируем обработчик событий
     @client.on(events.NewMessage(chats=CHANNEL_NAME))
     async def message_handler(event):
-        await handler(event, CHANNEL_NAME)
+        await handler(event, CHANNEL_NAME, client)
     
     # Подключаемся к Telegram
     await client.start()
@@ -119,6 +166,20 @@ async def main():
         print(f"📺 Продолжаем мониторинг: {CHANNEL_NAME}")
     
     print(f"🔍 Ищем ключевые слова: {', '.join(config.KEYWORDS)}")
+    
+    # Проверяем настройку уведомлений
+    if NOTIFY_CHAT_ID:
+        try:
+            # Проверяем доступность чата для уведомлений
+            await client.get_entity(int(NOTIFY_CHAT_ID))
+            print(f"✅ Уведомления будут отправляться в чат: {NOTIFY_CHAT_ID}")
+        except Exception as e:
+            print(f"⚠️  Предупреждение: Не удалось проверить чат для уведомлений ({NOTIFY_CHAT_ID}): {e}")
+            print(f"   Уведомления в Telegram могут не работать. Проверьте NOTIFY_CHAT_ID в .env")
+    else:
+        print("ℹ️  NOTIFY_CHAT_ID не указан - уведомления будут только в консоль")
+        print("   Для получения уведомлений в Telegram укажите NOTIFY_CHAT_ID в .env")
+    
     print("⏳ Ожидание новых сообщений... (Ctrl+C для остановки)\n")
     
     # Запускаем мониторинг
