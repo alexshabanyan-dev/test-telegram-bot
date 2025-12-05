@@ -35,12 +35,13 @@ def check_keywords(text: str) -> list:
     
     found_keywords = []
     # Всегда переводим текст в нижний регистр для сравнения
-    text_to_check = text.lower()
+    # Также нормализуем пробелы и убираем лишние символы
+    text_to_check = text.lower().strip()
     
     # Сравниваем все ключевые слова в нижнем регистре
     for keyword in config.KEYWORDS:
-        keyword_to_check = keyword.lower()
-        if keyword_to_check in text_to_check:
+        keyword_to_check = keyword.lower().strip()
+        if keyword_to_check and keyword_to_check in text_to_check:
             found_keywords.append(keyword)
     
     return found_keywords
@@ -142,7 +143,15 @@ async def handler(event, channel_name: str, client: TelegramClient):
     if found_keywords:
         print(f"✅ Найдены ключевые слова: {found_keywords}")
     else:
+        # Отладочная информация для диагностики
+        text_lower = message_text.lower() if message_text else ""
         print(f"ℹ️  Ключевые слова не найдены в сообщении")
+        print(f"   Ищем: {[k.lower() for k in config.KEYWORDS]}")
+        print(f"   Текст (первые 200 символов в lower): {text_lower[:200]}")
+        # Проверяем вручную для отладки
+        for keyword in config.KEYWORDS:
+            if keyword.lower() in text_lower:
+                print(f"   ⚠️  ОШИБКА: '{keyword.lower()}' ДОЛЖНО БЫТЬ НАЙДЕНО!")
     
     if found_keywords:
         # Получаем информацию о канале
