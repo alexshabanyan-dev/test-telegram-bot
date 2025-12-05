@@ -1,0 +1,18 @@
+[Unit]
+Description=Telegram Channel Monitor Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/test-telegram-bot
+Environment="PATH=/root/test-telegram-bot/venv/bin"
+ExecStart=/root/test-telegram-bot/venv/bin/python /root/test-telegram-bot/main.py
+Restart=always
+RestartSec=30
+# Увеличиваем время ожидания перед перезапуском
+StartLimitInterval=300
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

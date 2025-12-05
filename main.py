@@ -79,34 +79,10 @@ async def notify_user_telegram(client: TelegramClient, message_text: str, keywor
         notification += f"**Текст сообщения:**\n\n"
         notification += message_text[:2000]  # Ограничение длины сообщения в Telegram
         
-        # Определяем куда отправлять
-        if NOTIFY_CHAT_ID.lower() == 'me':
-            # Отправляем в Saved Messages (Избранное)
-            entity = 'me'
-        else:
-            # Преобразуем chat_id в число и пытаемся получить entity
-            try:
-                chat_id = int(NOTIFY_CHAT_ID)
-                # Пытаемся получить entity по ID
-                try:
-                    entity = await client.get_entity(chat_id)
-                except ValueError:
-                    # Если не получается по ID, пробуем отправить напрямую по числу
-                    entity = chat_id
-            except ValueError:
-                # Если chat_id не число, используем как есть (username)
-                entity = NOTIFY_CHAT_ID
-        
         # Отправляем сообщение
-        await client.send_message(entity, notification, parse_mode='markdown')
+        await client.send_message(NOTIFY_CHAT_ID, notification, parse_mode='markdown')
         print(f"✅ Уведомление отправлено в Telegram (chat_id: {NOTIFY_CHAT_ID})")
         
-    except ValueError as e:
-        print(f"⚠️  Ошибка: Не удалось найти чат с ID {NOTIFY_CHAT_ID}")
-        print(f"   Убедитесь, что:")
-        print(f"   1. Вы отправили хотя бы одно сообщение боту/в чат")
-        print(f"   2. Chat ID указан правильно")
-        print(f"   3. Для личных сообщений используйте 'me' вместо chat_id")
     except Exception as e:
         print(f"⚠️  Ошибка при отправке уведомления в Telegram: {e}")
 
@@ -166,16 +142,31 @@ async def main():
         return
     
     # Инициализируем клиент (внутри async функции)
-    client = TelegramClient('telegram_monitor', API_ID, API_HASH)
+    # Используем абсолютный путь для файла сессии, чтобы избежать конфликтов
+    import pathlib
+    session_path = pathlib.Path('telegram_monitor.session').absolute()
+    client = TelegramClient(str(session_path), API_ID, API_HASH)
     
     # Регистрируем обработчик событий
     @client.on(events.NewMessage(chats=CHANNEL_NAME))
     async def message_handler(event):
         await handler(event, CHANNEL_NAME, client)
     
-    # Подключаемся к Telegram
-    await client.start()
-    print("✅ Подключение к Telegram установлено")
+    # Подключаемся к Telegram с обработкой ошибок блокировки
+    try:
+        await client.start()
+        print("✅ Подключение к Telegram установлено")
+    except Exception as e:
+        if "database is locked" in str(e).lower() or "locked" in str(e).lower():
+            print("❌ Ошибка: Файл сессии заблокирован")
+            print("   Возможно, другой процесс использует этот файл сессии")
+            print("   Решение:")
+            print("   1. Остановите все процессы бота: sudo systemctl stop telegram-monitor.service")
+            print("   2. Удалите файлы блокировки: rm -f *.session-journal")
+            print("   3. Запустите скрипт исправления: bash fix_session_lock.sh")
+            return
+        else:
+            raise
     
     # Получаем информацию о канале
     try:
@@ -193,33 +184,16 @@ async def main():
     
     # Проверяем настройку уведомлений
     if NOTIFY_CHAT_ID:
-        if NOTIFY_CHAT_ID.lower() == 'me':
-            print(f"✅ Уведомления будут отправляться в Saved Messages (Избранное)")
-        else:
-            try:
-                # Пытаемся преобразовать в число
-                chat_id = int(NOTIFY_CHAT_ID)
-                try:
-                    # Пытаемся получить entity
-                    entity = await client.get_entity(chat_id)
-                    print(f"✅ Уведомления будут отправляться в чат: {NOTIFY_CHAT_ID}")
-                except ValueError:
-                    print(f"⚠️  Предупреждение: Не удалось найти чат с ID {NOTIFY_CHAT_ID}")
-                    print(f"   Попробуйте:")
-                    print(f"   1. Использовать 'me' для отправки в Saved Messages")
-                    print(f"   2. Отправить сообщение боту/в чат перед запуском")
-                    print(f"   3. Проверить правильность chat_id")
-            except ValueError:
-                # Если не число, возможно это username
-                try:
-                    entity = await client.get_entity(NOTIFY_CHAT_ID)
-                    print(f"✅ Уведомления будут отправляться в: {NOTIFY_CHAT_ID}")
-                except Exception as e:
-                    print(f"⚠️  Предупреждение: Не удалось проверить чат ({NOTIFY_CHAT_ID}): {e}")
+        try:
+            # Проверяем доступность чата для уведомлений
+            await client.get_entity(int(NOTIFY_CHAT_ID))
+            print(f"✅ Уведомления будут отправляться в чат: {NOTIFY_CHAT_ID}")
+        except Exception as e:
+            print(f"⚠️  Предупреждение: Не удалось проверить чат для уведомлений ({NOTIFY_CHAT_ID}): {e}")
+            print(f"   Уведомления в Telegram могут не работать. Проверьте NOTIFY_CHAT_ID в .env")
     else:
         print("ℹ️  NOTIFY_CHAT_ID не указан - уведомления будут только в консоль")
         print("   Для получения уведомлений в Telegram укажите NOTIFY_CHAT_ID в .env")
-        print("   Используйте 'me' для отправки в Saved Messages")
     
     print("⏳ Ожидание новых сообщений... (Ctrl+C для остановки)\n")
     
@@ -233,5 +207,10 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\n👋 Мониторинг остановлен пользователем")
     except Exception as e:
-        print(f"\n❌ Ошибка: {e}")
+        error_msg = str(e).lower()
+        if "database is locked" in error_msg or "locked" in error_msg:
+            print(f"\n❌ Ошибка: Файл сессии заблокирован")
+            print(f"   Выполните на сервере: bash fix_session_lock.sh")
+        else:
+            print(f"\n❌ Ошибка: {e}")
 
