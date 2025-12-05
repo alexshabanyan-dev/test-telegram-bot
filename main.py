@@ -20,6 +20,7 @@ load_dotenv(dotenv_path=env_path)
 # Получаем данные из переменных окружения
 API_ID = os.getenv('API_ID')
 API_HASH = os.getenv('API_HASH')
+BOT_TOKEN = os.getenv('BOT_TOKEN')  # Токен бота для отправки уведомлений (опционально)
 CHANNEL_NAME = os.getenv('CHANNEL_NAME', config.CHANNEL_NAME)
 NOTIFY_CHAT_ID = os.getenv('NOTIFY_CHAT_ID')  # ID чата для уведомлений (ваш личный чат или другой канал)
 
@@ -63,12 +64,16 @@ def notify_user_console(message_text: str, keywords: list, channel_name: str, me
 
 
 async def notify_user_telegram(client: TelegramClient, message_text: str, keywords: list, 
-                               channel_name: str, message_id: int, channel_link: str = None):
+                               channel_name: str, message_id: int, channel_link: str = None, bot_client=None):
     """
     Отправляет уведомление в Telegram
+    Использует бота, если указан BOT_TOKEN, иначе использует основной клиент
     """
     if not NOTIFY_CHAT_ID:
         return
+    
+    # Определяем какой клиент использовать для отправки
+    send_client = bot_client if bot_client else client
     
     try:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -94,7 +99,8 @@ async def notify_user_telegram(client: TelegramClient, message_text: str, keywor
                 chat_id = int(NOTIFY_CHAT_ID)
                 # Пытаемся получить entity по ID
                 try:
-                    entity = await client.get_entity(chat_id)
+                    # Используем send_client для получения entity
+                    entity = await send_client.get_entity(chat_id)
                 except (ValueError, TypeError):
                     # Если не получается, пробуем разные форматы ID
                     # Для групп/каналов может быть -100XXXXXXXXXX или -XXXXXXXXXX
@@ -102,7 +108,7 @@ async def notify_user_telegram(client: TelegramClient, message_text: str, keywor
                         # Если ID отрицательный и меньше 13 цифр, пробуем добавить -100
                         if chat_id < 0 and len(str(abs(chat_id))) < 13:
                             entity_with_prefix = int(f"-100{abs(chat_id)}")
-                            entity = await client.get_entity(entity_with_prefix)
+                            entity = await send_client.get_entity(entity_with_prefix)
                         else:
                             # Пробуем отправить напрямую по числу
                             entity = chat_id
@@ -114,8 +120,9 @@ async def notify_user_telegram(client: TelegramClient, message_text: str, keywor
                 entity = NOTIFY_CHAT_ID
         
         # Отправляем сообщение
-        await client.send_message(entity, notification, parse_mode='markdown')
-        print(f"✅ Уведомление отправлено в Telegram (chat_id: {NOTIFY_CHAT_ID})")
+        await send_client.send_message(entity, notification, parse_mode='markdown')
+        sender = "бот" if bot_client else "аккаунт"
+        print(f"✅ Уведомление отправлено в Telegram от {sender} (chat_id: {NOTIFY_CHAT_ID})")
         
     except ValueError as e:
         print(f"⚠️  Ошибка: Не удалось найти чат с ID {NOTIFY_CHAT_ID}")
@@ -181,13 +188,16 @@ async def handler(event, channel_name: str, client: TelegramClient):
         )
         
         # Отправляем в Telegram
+        # Получаем bot_client из глобального контекста (если есть)
+        bot_client = getattr(handler, 'bot_client', None)
         await notify_user_telegram(
             client=client,
             message_text=message_text,
             keywords=found_keywords,
             channel_name=channel_title,
             message_id=message.id,
-            channel_link=channel_link
+            channel_link=channel_link,
+            bot_client=bot_client
         )
 
 
@@ -206,11 +216,26 @@ async def main():
         print("❌ Ошибка: Не указан CHANNEL_NAME в .env файле или config.py")
         return
     
-    # Инициализируем клиент (внутри async функции)
+    # Инициализируем клиент для мониторинга (user account)
     # Используем абсолютный путь для файла сессии, чтобы избежать конфликтов
     import pathlib
     session_path = pathlib.Path('telegram_monitor.session').absolute()
     client = TelegramClient(str(session_path), API_ID, API_HASH)
+    
+    # Инициализируем бота для отправки уведомлений (если указан токен)
+    bot_client = None
+    if BOT_TOKEN:
+        try:
+            bot_session_path = pathlib.Path('telegram_bot.session').absolute()
+            bot_client = TelegramClient(str(bot_session_path), API_ID, API_HASH)
+            # Для бота используем токен вместо user account
+            await bot_client.start(bot_token=BOT_TOKEN)
+            print("✅ Бот подключен для отправки уведомлений")
+            # Сохраняем bot_client в глобальном контексте для использования в handler
+            handler.bot_client = bot_client
+        except Exception as e:
+            print(f"⚠️  Предупреждение: Не удалось подключить бота: {e}")
+            print(f"   Уведомления будут отправляться от вашего аккаунта")
     
     # Подключаемся к Telegram с обработкой ошибок блокировки
     try:
